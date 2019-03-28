@@ -134,7 +134,7 @@ public class HBaseUtil {
                 Table table = conn.getTable(TableName.valueOf(tableName));
                 table.delete(delete);
             } catch (IOException e) {
-                logger.error("EditOption_$_");
+                logger.error("EditOption_$_delete 错误！！！");
                 e.printStackTrace();
             }
         }
@@ -460,11 +460,7 @@ public class HBaseUtil {
         }
     }
 
-    public static class MROption extends Option {
-        public MROption(Configuration conf) {
-            super(conf);
-        }
-    }
+
 
     /**
      * namespace操作类
@@ -476,7 +472,7 @@ public class HBaseUtil {
         public NamespaceOption(Configuration conf) {
             super(conf);
             try {
-                this.master = super.conn.getAdmin();
+                this.master = conn.getAdmin();
             } catch (IOException e) {
                 logger.error("NamespaceOption 错误！！！");
                 e.printStackTrace();
