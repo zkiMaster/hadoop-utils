@@ -90,6 +90,13 @@ public class HBaseUtil {
             return singleColumnValueFilter;
         }
 
+        public static Filter getSingleColumnValueExcludeFilter(CompareFilter.CompareOp compareOp, String family,
+                                                               String qualifier, String value) {
+            SingleColumnValueExcludeFilter filter = new SingleColumnValueExcludeFilter(Bytes.toBytes(family),
+                    Bytes.toBytes(qualifier), compareOp, Bytes.toBytes(value));
+            return filter;
+        }
+
 
         /**
          * 列族过滤器
@@ -193,6 +200,17 @@ public class HBaseUtil {
         }
 
         /**
+         * 当遇到一条数据被过滤时，它就会放弃后面的扫描。
+         * 使用封装的过滤器来检查KeyValue,并确认是否一行数据因行键或是列被跳过而过滤。
+         * @param filter
+         * @return
+         */
+        public static Filter getWhileMatchFilter(Filter filter){
+            WhileMatchFilter matchFilter = new WhileMatchFilter(filter);
+            return matchFilter;
+        }
+
+        /**
          * 该过滤器仅仅返回每一行中的第一个cell的值，可以用于高效的执行行数统计操作。
          *
          * @return
@@ -201,13 +219,37 @@ public class HBaseUtil {
             return new FirstKeyOnlyFilter();
         }
 
+
+        /**
+         * 返回每行的前 num 列
+         *
+         * @param num
+         * @return
+         */
+        public static Filter getCoulumnPreCountFilter(int num) {
+            ColumnCountGetFilter filter = new ColumnCountGetFilter(num);
+            return filter;
+        }
+
+        /**
+         * 返回指定时间序列的列
+         *
+         * @param timeStamps
+         * @return
+         */
+        public static Filter getTimeStampFilter(List<Long> timeStamps) {
+            TimestampsFilter filter = new TimestampsFilter(timeStamps);
+            return filter;
+        }
+
         /**
          * 多个list根据指定条件进行串联
+         *
          * @param operator
          * @param filters
          * @return
          */
-        public static FilterList addFilter(FilterList.Operator operator,Filter ... filters){
+        public static FilterList addFilter(FilterList.Operator operator, Filter... filters) {
             FilterList filterList = new FilterList(operator, Arrays.asList(filters));
             return filterList;
         }
@@ -613,7 +655,7 @@ public class HBaseUtil {
                     count += cells.size();
                 }
             } catch (IOException e) {
-            logger.error("TableOption_$_count 错误！！！");
+                logger.error("TableOption_$_count 错误！！！");
                 e.printStackTrace();
             }
             return count;
