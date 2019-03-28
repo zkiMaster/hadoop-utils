@@ -202,10 +202,11 @@ public class HBaseUtil {
         /**
          * 当遇到一条数据被过滤时，它就会放弃后面的扫描。
          * 使用封装的过滤器来检查KeyValue,并确认是否一行数据因行键或是列被跳过而过滤。
+         *
          * @param filter
          * @return
          */
-        public static Filter getWhileMatchFilter(Filter filter){
+        public static Filter getWhileMatchFilter(Filter filter) {
             WhileMatchFilter matchFilter = new WhileMatchFilter(filter);
             return matchFilter;
         }
@@ -492,6 +493,20 @@ public class HBaseUtil {
             }
         }
 
+
+        public Result incrementColumn(String tableName, String rowKey) {
+            Result result=null;
+            try {
+                Table table = conn.getTable(TableName.valueOf(tableName));
+                Increment increment = new Increment(Bytes.toBytes(rowKey));
+                result = table.increment(increment);
+
+
+            } catch (IOException e) {
+                logger.error("TableOption_$_incrementColumn 错误！！！");
+            }
+            return result;
+        }
 
         public void create(HTableDescriptor descriptor) {
 
