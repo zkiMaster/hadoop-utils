@@ -1,20 +1,15 @@
 package com.utils.hbase;
 
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.hbase.HColumnDescriptor;
-import org.apache.hadoop.hbase.HTableDescriptor;
-import org.apache.hadoop.hbase.NamespaceDescriptor;
-import org.apache.hadoop.hbase.TableName;
+import org.apache.hadoop.hbase.*;
 import org.apache.hadoop.hbase.client.*;
+import org.apache.hadoop.hbase.filter.*;
 import org.apache.hadoop.hbase.util.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class HBaseUtil {
 
@@ -66,10 +61,158 @@ public class HBaseUtil {
         public QueryOption(Configuration conf) {
             super(conf);
         }
-
-
     }
 
+
+    public static class FilterOption extends Option {
+        public FilterOption(Configuration conf) {
+            super(conf);
+        }
+
+        /**
+         * 根据列的值返回一个比较器
+         *
+         * @param compareOp
+         * @param family
+         * @param qualifier
+         * @param value
+         * @param missReturnAll 如果为true，当这一列不存在时，不会返回，如果为false
+         * @param lastVersion   是否返回之后一个版本
+         * @return
+         */
+        public static Filter getSingleColumnValueFilter(CompareFilter.CompareOp compareOp, String family,
+                                                        String qualifier, String value, Boolean missReturnAll, Boolean lastVersion) {
+            SingleColumnValueFilter singleColumnValueFilter = new SingleColumnValueFilter(Bytes.toBytes(family), Bytes.toBytes(qualifier),
+                    compareOp, Bytes.toBytes(value));
+            singleColumnValueFilter.setFilterIfMissing(missReturnAll);
+            //是否返回最后一个版本
+            singleColumnValueFilter.setLatestVersionOnly(lastVersion);
+            return singleColumnValueFilter;
+        }
+
+
+        /**
+         * 列族过滤器
+         *
+         * @param compareOp
+         * @param family
+         * @return
+         */
+        public static Filter getFamilyFilter(CompareFilter.CompareOp compareOp, String family) {
+            FamilyFilter familyFilter =
+                    new FamilyFilter(compareOp, new BinaryComparator(Bytes.toBytes(family)));
+            return familyFilter;
+        }
+
+        /**
+         * 列过滤器
+         *
+         * @param compareOp
+         * @param qualifier
+         * @return
+         */
+        public static Filter getQualifierFilter(CompareFilter.CompareOp compareOp, String qualifier) {
+            QualifierFilter filter = new QualifierFilter(compareOp, new BinaryComparator(Bytes.toBytes(qualifier)));
+            return filter;
+        }
+
+        /**
+         * 列过滤器
+         * 根据 qualifierPrefix 进行模糊匹配
+         * 类似于mysql中的 'a%'
+         *
+         * @param qualifierPrefix
+         * @return
+         */
+        public static Filter getQualifierPrefixFilter(String qualifierPrefix) {
+            ColumnPrefixFilter filter = new ColumnPrefixFilter(Bytes.toBytes(qualifierPrefix));
+            return filter;
+        }
+
+        /**
+         * 列过滤器
+         * 基于多个列名(即Qualifier)前缀过滤数据
+         *
+         * @param mulQulifierPrefix
+         * @return
+         */
+        public static Filter getMulQualifierPrefixFilter(String... mulQulifierPrefix) {
+            MultipleColumnPrefixFilter filter = new MultipleColumnPrefixFilter(Bytes.toByteArrays(mulQulifierPrefix));
+            return filter;
+        }
+
+
+        /**
+         * 基于列的范围过滤器
+         *
+         * @param starColumn
+         * @param minColumnInclusive 是否包含下边界
+         * @param endColumn
+         * @param maxColumnInclusive 是否包含下边界
+         * @return
+         */
+        public static Filter getQualifierRangeFilter(String starColumn, boolean minColumnInclusive, String endColumn, boolean maxColumnInclusive) {
+            ColumnRangeFilter filter = new ColumnRangeFilter(Bytes.toBytes(starColumn), minColumnInclusive,
+                    Bytes.toBytes(endColumn), maxColumnInclusive);
+            return filter;
+        }
+
+        /**
+         * 行过滤器
+         *
+         * @param compareOp
+         * @param rowKey
+         * @return
+         */
+        public static Filter getRowKeyFilter(CompareFilter.CompareOp compareOp,
+                                             String rowKey) {
+            RowFilter filter = new RowFilter(compareOp, new SubstringComparator(rowKey));
+            return filter;
+        }
+
+        /**
+         * 返回指定页面的结果集
+         *
+         * @param pageSize
+         * @return
+         */
+        public static Filter getPageFilter(Long pageSize) {
+            PageFilter pageFilter = new PageFilter(pageSize);
+            return pageFilter;
+        }
+
+        /**
+         * 根据整行中的每个列来做过滤，只要存在一列不满足条件，整行都被过滤掉。
+         *
+         * @param filter
+         * @return
+         */
+        public static Filter getSkipFilter(Filter filter) {
+            SkipFilter skipFilter = new SkipFilter(filter);
+            return skipFilter;
+        }
+
+        /**
+         * 该过滤器仅仅返回每一行中的第一个cell的值，可以用于高效的执行行数统计操作。
+         *
+         * @return
+         */
+        public static Filter getFirstOnlyFilter() {
+            return new FirstKeyOnlyFilter();
+        }
+
+        /**
+         * 多个list根据指定条件进行串联
+         * @param operator
+         * @param filters
+         * @return
+         */
+        public static FilterList addFilter(FilterList.Operator operator,Filter ... filters){
+            FilterList filterList = new FilterList(operator, Arrays.asList(filters));
+            return filterList;
+        }
+
+    }
 
     public static class EditOption extends Option {
 
@@ -87,6 +230,7 @@ public class HBaseUtil {
 
         /**
          * 删除rowKey相同的数据
+         *
          * @param tableName
          * @param rowKey
          */
@@ -103,6 +247,7 @@ public class HBaseUtil {
 
         /**
          * 删除一行中某一列族中的所有数据
+         *
          * @param tableName
          * @param rowKey
          * @param cf
@@ -134,13 +279,14 @@ public class HBaseUtil {
                 Table table = conn.getTable(TableName.valueOf(tableName));
                 table.delete(delete);
             } catch (IOException e) {
-                logger.error("EditOption_$_delete 错误！！！");
+                logger.error("EditOption_$_");
                 e.printStackTrace();
             }
         }
 
         /**
          * 删除某一列数据
+         *
          * @param tableName
          * @param rowKey
          * @param cf
@@ -161,6 +307,7 @@ public class HBaseUtil {
 
         /**
          * 往多行中的某一列插入相同的数据
+         *
          * @param tableName
          * @param cf
          * @param qualifier
@@ -224,7 +371,7 @@ public class HBaseUtil {
          * @param tableName
          * @param rowKey
          * @param columnFamily
-         * @param list   map的key：列名，value：值
+         * @param list         map的key：列名，value：值
          */
         public void put(String tableName, String rowKey, String columnFamily,
                         List<Map<String, String>> list) {
@@ -303,8 +450,6 @@ public class HBaseUtil {
             }
         }
 
-        public void create(String tableName, String namespace, HTableDescriptor descriptor) {
-        }
 
         public void create(HTableDescriptor descriptor) {
 
@@ -449,17 +594,31 @@ public class HBaseUtil {
                 master.deleteTable(TableName.valueOf(tableName));
             } catch (IOException e) {
                 logger.error("TableOption_$_drop 错误");
-//                e.printStackTrace();
                 return false;
             }
             return true;
         }
 
-        public void count() {
-
+        public int count(String tableName) {
+            int count = 0;
+            try {
+                Table table = conn.getTable(TableName.valueOf(tableName));
+                Scan scan = new Scan();
+                //只获取每一行的第一个cell
+                scan.setFilter(FilterOption.getFirstOnlyFilter());
+                ResultScanner resultScanner = table.getScanner(scan);
+                for (Result result : resultScanner) {
+                    //统计
+                    List<Cell> cells = result.listCells();
+                    count += cells.size();
+                }
+            } catch (IOException e) {
+            logger.error("TableOption_$_count 错误！！！");
+                e.printStackTrace();
+            }
+            return count;
         }
     }
-
 
 
     /**
@@ -472,7 +631,7 @@ public class HBaseUtil {
         public NamespaceOption(Configuration conf) {
             super(conf);
             try {
-                this.master = conn.getAdmin();
+                this.master = super.conn.getAdmin();
             } catch (IOException e) {
                 logger.error("NamespaceOption 错误！！！");
                 e.printStackTrace();
